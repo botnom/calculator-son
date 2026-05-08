@@ -1,0 +1,2359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://js.puter.com/v2/"></script>
+  <script type="module" src="https://unpkg.com/x-frame-bypass"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+    * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
+
+    :root {
+      --bg-color: #0f0f13;
+      --sidebar-color: #111117;
+      --border-color: #1e1e2a;
+      --accent-color: #7c3aed;
+      --panel-bg: #111117;
+      --text-main: #e2e8f0;
+      --text-sub: #888;
+    }
+
+    body { margin: 0; background: var(--bg-color); color: #fff; overflow: hidden; height: 100vh; transition: background 0.3s ease; }
+
+    /* Boot Terminal Styling */
+    #boot-screen {
+      position: fixed; inset: 0; background: #000; color: #fff; 
+      font-family: 'Courier New', Courier, monospace; font-size: 13px;
+      padding: 30px; z-index: 1000; overflow: hidden; display: none;
+    }
+    .boot-line { margin-bottom: 2px; line-height: 1.2; }
+    .boot-ok { color: #fff; font-weight: bold; }
+    .boot-fail { color: #f00; font-weight: bold; }
+
+    /* Flicker Animation */
+    @keyframes flicker {
+      0% { opacity: 1; }
+      1% { opacity: 0.1; background: #fff; }
+      2% { opacity: 1; background: #000; }
+      5% { opacity: 0.8; }
+      6% { opacity: 1; }
+      20% { opacity: 1; }
+      21% { opacity: 0.2; background: #fff; }
+      22% { opacity: 1; background: #000; }
+      100% { opacity: 1; }
+    }
+    .flicker-active { animation: flicker 0.1s steps(2) infinite; }
+
+    /* Theme Background Layer */
+    #theme-bg {
+      position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      display: none; overflow: hidden;
+    }
+
+    /* Floating Calculator Overlay */
+    #calc-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+      z-index: 2000; display: none; align-items: center; justify-content: center;
+      backdrop-filter: blur(10px);
+    }
+    .calc-overlay-close {
+      position: absolute; top: 20px; right: 20px;
+      font-size: 30px; color: #fff; cursor: pointer; opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+    .calc-overlay-close:hover { opacity: 1; }
+    .calc-trigger {
+      position: fixed; top: 12px; right: 20px; z-index: 1500;
+      background: #1e1e2a; border: 1px solid #333;
+      color: #ffffff !important; padding: 8px 16px; border-radius: 12px; cursor: pointer;
+      display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700;
+      transition: all 0.2s; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    .calc-trigger:hover { background: #2a2a3a; border-color: var(--accent-color); transform: translateY(-1px); }
+    .calc-trigger svg { width: 16px; height: 16px; fill: currentColor; }
+    .liquid-blob {
+      position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.5;
+      animation: float 20s infinite alternate;
+    }
+    @keyframes float {
+      0% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(10vw, 15vh) scale(1.2); }
+      100% { transform: translate(-5vw, 10vh) scale(0.9); }
+    }
+
+    /* ── CALCULATOR ── */
+    #calc-screen {
+      display: flex; align-items: center; justify-content: center;
+      height: 100vh; background: #1a1a1f;
+    }
+    .calc-wrap {
+      background: #222228; border-radius: 28px; padding: 28px 24px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.7); width: 320px;
+      position: relative; overflow: hidden;
+    }
+    .disguise-view {
+      display: none; height: 100%; width: 100%; 
+      background: #fff; color: #000; border-radius: 18px;
+      padding: 15px; font-size: 11px; line-height: 1.4; overflow-y: auto;
+    }
+    .disguise-view.active { display: block; }
+    .disguise-article h4 { font-size: 14px; margin-bottom: 8px; font-weight: 700; color: #1a1a1a; }
+    .disguise-article p { margin-bottom: 8px; }
+    
+    .molecule-container {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; height: 350px;
+      background: #f8f9fa; border-radius: 18px;
+    }
+    .molecule-svg { width: 80%; height: 200px; animation: rotateMolecule 20s infinite linear; }
+    @keyframes rotateMolecule { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .molecule-label { margin-top: 15px; font-weight: 700; color: #444; font-family: monospace; }
+    .calc-display {
+      background: #111116; border-radius: 16px; padding: 20px 18px 14px;
+      margin-bottom: 22px; text-align: right; min-height: 90px;
+      display: flex; flex-direction: column; justify-content: flex-end;
+    }
+    .calc-display .sub { color: #666; font-size: 14px; min-height: 20px; margin-bottom: 4px; }
+    .calc-display .main { color: #fff; font-size: 36px; font-weight: 600; word-break: break-all; }
+    .calc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .cb {
+      background: #2e2e38; border: none; border-radius: 14px; color: #fff;
+      font-size: 18px; font-weight: 500; padding: 18px 0; cursor: pointer;
+      transition: all .15s; position: relative; overflow: hidden;
+    }
+    .cb:active { transform: scale(.94); }
+    .cb.op { background: #3a3a50; color: #a78bfa; }
+    .cb.eq { background: linear-gradient(135deg,#7c3aed,#a855f7); color: #fff; grid-column: span 2; }
+    .cb.zero { grid-column: span 2; text-align: left; padding-left: 26px; }
+    .cb.clear { background: #3d2a2a; color: #f87171; }
+    .cb.del { background: #2e3040; color: #93c5fd; }
+
+    /* secret $ button */
+    .cb.secret { background: #1a1a22; color: #1a1a22; font-size: 14px; border: 1px solid #2a2a35; }
+    .cb.secret:hover { background: #2a1a4a; color: #7c3aed; border-color: #7c3aed; }
+
+    /* ── MAIN APP ── */
+    #app-screen {
+      display: none; height: 100vh; background: #0d0d12;
+      flex-direction: column; overflow: hidden;
+    }
+
+    /* sidebar */
+    .sidebar {
+      width: 220px; min-width: 220px; background: var(--sidebar-color);
+      border-right: 1px solid var(--border-color); display: flex; flex-direction: column;
+      padding: 20px 14px; z-index: 10;
+    }
+    .sidebar-nav {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 0 -14px;
+      padding: 0 14px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.1) transparent;
+    }
+    .sidebar-nav::-webkit-scrollbar { width: 4px; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+    .sidebar-logo {
+      font-size: 20px; font-weight: 800; padding: 10px 8px 18px;
+      background: linear-gradient(135deg, var(--accent-color), #60a5fa);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      letter-spacing: -.5px;
+    }
+    .nav-btn {
+      display: flex; align-items: center; gap: 10px; padding: 11px 12px;
+      border-radius: 12px; cursor: pointer; font-size: 14px; font-weight: 500;
+      color: var(--text-sub); transition: all .2s; border: none; background: transparent; width: 100%;
+      text-align: left;
+    }
+    .nav-btn:hover { background: rgba(255,255,255,0.05); color: #ccc; }
+    .nav-btn.active { background: rgba(124, 58, 237, 0.15); color: var(--accent-color); }
+    .nav-btn .icon { font-size: 18px; width: 24px; text-align: center; }
+
+    .sidebar-footer { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border-color); }
+    .api-badge {
+      font-size: 11px; color: #4ade80; background: rgba(16, 185, 129, 0.1); border-radius: 8px;
+      padding: 6px 10px; text-align: center; font-weight: 600;
+    }
+
+    /* main content */
+    .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; z-index: 5; }
+
+    /* top bar */
+    .topbar {
+      background: var(--sidebar-color); border-bottom: 1px solid var(--border-color);
+      padding: 14px 24px; display: flex; align-items: center; gap: 12px;
+    }
+    .topbar-title { font-size: 16px; font-weight: 700; color: var(--text-main); }
+    .topbar-sub { font-size: 12px; color: #555; margin-left: auto; }
+
+    /* panels */
+    .panel { display: none; flex: 1; flex-direction: column; overflow: hidden; background: var(--panel-bg); }
+    .panel.active { display: flex; }
+
+    /* Settings UI */
+    .settings-grid { padding: 30px; display: flex; flex-direction: column; gap: 30px; overflow-y: auto; }
+    .settings-section { display: flex; flex-direction: column; gap: 15px; }
+    .settings-section h3 { font-size: 14px; font-weight: 700; color: var(--text-sub); text-transform: uppercase; letter-spacing: 1px; }
+    .theme-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+    .theme-card {
+      background: rgba(255,255,255,0.03); border: 1px solid var(--border-color);
+      border-radius: 14px; padding: 12px; cursor: pointer; transition: all 0.2s;
+      display: flex; flex-direction: column; gap: 8px; align-items: center;
+    }
+    .theme-card:hover { border-color: var(--accent-color); transform: translateY(-2px); }
+    .theme-card.active { border-color: var(--accent-color); background: rgba(124, 58, 237, 0.05); }
+    .theme-preview { width: 100%; height: 60px; border-radius: 8px; }
+    .theme-name { font-size: 12px; font-weight: 600; color: var(--text-main); }
+
+    /* Study Notes UI */
+    .notes-container { display: grid; grid-template-columns: 260px 1fr; height: 100%; }
+    .notes-list { border-right: 1px solid var(--border-color); padding: 15px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+    .note-item { 
+      padding: 12px; border-radius: 10px; cursor: pointer; font-size: 13px; color: var(--text-sub); 
+      border: 1px solid transparent; transition: all 0.2s;
+    }
+    .note-item:hover { background: rgba(255,255,255,0.03); }
+    .note-item.active { background: rgba(124, 58, 237, 0.1); color: var(--text-main); border-color: var(--accent-color); }
+    .note-editor { display: flex; flex-direction: column; }
+    .note-header { padding: 15px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+    .note-title-input { background: transparent; border: none; font-size: 18px; font-weight: 700; color: var(--text-main); outline: none; width: 100%; }
+    .note-content { flex: 1; padding: 20px; background: transparent; border: none; color: var(--text-main); font-size: 15px; line-height: 1.6; outline: none; resize: none; }
+
+    /* ─── AI CHAT ─── */
+    .chat-messages {
+      flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px;
+      scrollbar-width: thin; scrollbar-color: #2a2a3a transparent;
+    }
+    .msg { display: flex; gap: 12px; max-width: 780px; }
+    .msg.user { flex-direction: row-reverse; align-self: flex-end; }
+    .msg-avatar {
+      width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 16px;
+    }
+    .msg.ai .msg-avatar { background: linear-gradient(135deg,#4f46e5,#7c3aed); }
+    .msg.user .msg-avatar { background: linear-gradient(135deg,#0ea5e9,#6366f1); }
+    .msg-bubble {
+      background: #1a1a24; border-radius: 16px; padding: 12px 16px;
+      font-size: 14px; line-height: 1.7; color: #d1d5db; max-width: 600px;
+    }
+    .msg.user .msg-bubble { background: #1d1535; color: #c4b5fd; }
+    .msg-bubble pre {
+      background: #0d0d12; border-radius: 10px; padding: 12px; margin: 8px 0 0;
+      overflow-x: auto; font-size: 12px; white-space: pre-wrap; color: #a5f3fc;
+    }
+
+    .chat-input-area {
+      background: #111117; border-top: 1px solid #1e1e2a;
+      padding: 16px 24px; display: flex; gap: 12px; align-items: flex-end;
+    }
+    .chat-input {
+      flex: 1; background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 14px;
+      padding: 12px 16px; color: #e2e8f0; font-size: 14px; resize: none;
+      outline: none; max-height: 140px; min-height: 48px; line-height: 1.5;
+      transition: border-color .2s;
+    }
+    .chat-input:focus { border-color: #7c3aed; }
+    .send-btn {
+      background: linear-gradient(135deg,#7c3aed,#a855f7); border: none;
+      border-radius: 12px; padding: 12px 20px; color: #fff; cursor: pointer;
+      font-size: 18px; transition: all .2s; flex-shrink: 0;
+    }
+    .send-btn:hover { opacity: .9; transform: scale(1.03); }
+    .send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* typing indicator */
+    .typing-dots span {
+      display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+      background: #7c3aed; margin: 0 2px; animation: bounce .9s infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: .2s; }
+    .typing-dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-7px)} }
+
+    /* ─── HUMANIZER ─── */
+    .humanizer-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+      flex: 1; overflow: hidden; padding: 20px 24px;
+    }
+    .hbox {
+      background: #111117; border: 1px solid #1e1e2a; border-radius: 18px;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .hbox-header {
+      padding: 12px 16px; border-bottom: 1px solid #1e1e2a;
+      font-size: 13px; font-weight: 600; color: #888; display: flex; align-items: center; gap: 8px;
+    }
+    .hbox-header .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .hbox textarea {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: #d1d5db; font-size: 14px; line-height: 1.8; padding: 16px;
+      resize: none; font-family: 'Inter', sans-serif;
+    }
+    .hbox-footer {
+      padding: 10px 16px; border-top: 1px solid #1e1e2a;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .word-count { font-size: 12px; color: #555; }
+    .humanize-btn {
+      background: linear-gradient(135deg,#059669,#10b981); border: none;
+      border-radius: 10px; padding: 9px 20px; color: #fff; cursor: pointer;
+      font-size: 13px; font-weight: 600; transition: all .2s;
+    }
+    .humanize-btn:hover { opacity: .9; }
+    .humanize-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .copy-btn {
+      background: #1a2a3a; border: 1px solid #1e3a5a; border-radius: 10px;
+      padding: 7px 14px; color: #60a5fa; cursor: pointer; font-size: 12px;
+      font-weight: 600; transition: all .2s;
+    }
+    .copy-btn:hover { background: #1e3a5a; }
+    .humanizer-controls {
+      padding: 10px 24px; border-bottom: 1px solid #1a1a24;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .mode-chip {
+      padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+      cursor: pointer; border: 1px solid #2a2a3a; background: transparent;
+      color: #666; transition: all .2s;
+    }
+    .mode-chip.active { background: #1d1535; color: #a78bfa; border-color: #7c3aed; }
+
+    /* ─── QUESTION SEARCHER ─── */
+    .qs-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 20px 24px; gap: 16px; }
+    .qs-search-row { display: flex; gap: 12px; }
+    .qs-input {
+      flex: 1; background: #111117; border: 1px solid #2a2a3a; border-radius: 14px;
+      padding: 14px 18px; color: #e2e8f0; font-size: 15px; outline: none;
+      transition: border-color .2s;
+    }
+    .qs-input:focus { border-color: #7c3aed; }
+    .qs-btn {
+      background: linear-gradient(135deg,#7c3aed,#a855f7); border: none;
+      border-radius: 14px; padding: 14px 26px; color: #fff; cursor: pointer;
+      font-size: 14px; font-weight: 700; transition: all .2s;
+    }
+    .qs-btn:hover { opacity: .9; }
+    .qs-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .qs-results {
+      flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+      scrollbar-width: thin; scrollbar-color: #2a2a3a transparent;
+    }
+    .qs-card {
+      background: #111117; border: 1px solid #1e1e2a; border-radius: 16px;
+      padding: 20px; animation: fadein .3s ease;
+    }
+    .qs-card .q-label { font-size: 11px; font-weight: 700; color: #7c3aed; letter-spacing: 1px; margin-bottom: 8px; }
+    .qs-card .q-text { font-size: 15px; font-weight: 600; color: #e2e8f0; margin-bottom: 12px; }
+    .qs-card .a-label { font-size: 11px; font-weight: 700; color: #10b981; letter-spacing: 1px; margin-bottom: 8px; }
+    .qs-card .a-text { font-size: 14px; color: #9ca3af; line-height: 1.7; }
+    .qs-placeholder {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #333; gap: 12px;
+    }
+    .qs-placeholder .big { font-size: 48px; }
+    .qs-placeholder p { font-size: 14px; }
+
+    /* ─── API KEY MODAL ─── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 100;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(6px);
+    }
+    .modal {
+      background: #14141c; border: 1px solid #2a2a3a; border-radius: 24px;
+      padding: 36px; width: 520px; max-width: 95vw;
+    }
+    .modal h2 { font-size: 22px; font-weight: 800; margin-bottom: 6px; color: #e2e8f0; }
+    .modal p { font-size: 13px; color: #666; margin-bottom: 24px; line-height: 1.6; }
+    .modal label { font-size: 12px; font-weight: 600; color: #888; display: block; margin-bottom: 6px; margin-top: 14px; }
+    .modal input {
+      width: 100%; background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 12px;
+      padding: 12px 14px; color: #e2e8f0; font-size: 14px; outline: none; transition: border-color .2s;
+    }
+    .modal input:focus { border-color: #7c3aed; }
+    .modal-btns { display: flex; gap: 10px; margin-top: 24px; }
+    .modal-btn {
+      flex: 1; padding: 13px; border-radius: 12px; border: none; cursor: pointer;
+      font-size: 14px; font-weight: 700; transition: all .2s;
+    }
+    .modal-btn.primary { background: linear-gradient(135deg,#7c3aed,#a855f7); color: #fff; }
+    .modal-btn.primary:hover { opacity: .9; }
+    .modal-btn.secondary { background: #1a1a24; color: #888; border: 1px solid #2a2a3a; }
+    .modal-btn.secondary:hover { background: #222230; }
+    .api-info {
+      background: #0d1a12; border: 1px solid #1a3a22; border-radius: 12px;
+      padding: 12px 14px; margin-top: 16px; font-size: 12px; color: #4ade80; line-height: 1.7;
+    }
+    .api-info a { color: #86efac; }
+
+    @keyframes fadein { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 3px; }
+
+    .spinner {
+      width: 18px; height: 18px; border: 2px solid #3a3a5a;
+      border-top-color: #a78bfa; border-radius: 50%;
+      animation: spin .7s linear infinite; display: inline-block;
+    }
+    @keyframes spin { to{transform:rotate(360deg)} }
+
+    .status-bar {
+      height: 3px; background: linear-gradient(90deg,#7c3aed,#a855f7,#60a5fa);
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      animation: shimmer 2s linear infinite;
+      background-size: 200% 100%;
+    }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+    .tag {
+      display: inline-block; padding: 2px 8px; border-radius: 6px;
+      font-size: 10px; font-weight: 700; letter-spacing: .5px;
+    }
+    .tag.green { background: #0d2218; color: #4ade80; }
+    .tag.purple { background: #1d1535; color: #a78bfa; }
+    .tag.blue { background: #0d1a30; color: #60a5fa; }
+  </style>
+</head>
+<body>
+
+<div id="theme-bg"></div>
+
+<!-- ═══════════════ BOOT SCREEN ═══════════════ -->
+<div id="boot-screen">
+  <div id="boot-terminal"></div>
+</div>
+
+<!-- ═══════════════ CALCULATOR ═══════════════ -->
+<div id="calc-screen">
+  <div class="calc-wrap" id="calc-wrap-main">
+    <!-- View 1: Standard Calculator -->
+    <div id="main-calc-view" class="disguise-content active">
+      <div class="calc-display">
+        <div class="sub" id="calc-sub"></div>
+        <div class="main" id="calc-main">0</div>
+      </div>
+      <div class="calc-grid">
+        <button class="cb clear" onclick="calcClear()">AC</button>
+        <button class="cb del" onclick="calcDel()">⌫</button>
+        <button class="cb op" onclick="calcOp('%')">%</button>
+        <button class="cb op" onclick="calcOp('/')">÷</button>
+        <button class="cb" onclick="calcNum('7')">7</button>
+        <button class="cb" onclick="calcNum('8')">8</button>
+        <button class="cb" onclick="calcNum('9')">9</button>
+        <button class="cb op" onclick="calcOp('*')">×</button>
+        <button class="cb" onclick="calcNum('4')">4</button>
+        <button class="cb" onclick="calcNum('5')">5</button>
+        <button class="cb" onclick="calcNum('6')">6</button>
+        <button class="cb op" onclick="cycleDisguise('main')">−</button>
+        <button class="cb" onclick="calcNum('1')">1</button>
+        <button class="cb" onclick="calcNum('2')">2</button>
+        <button class="cb" onclick="calcNum('3')">3</button>
+        <button class="cb op" onclick="calcOp('+')">+</button>
+        <button class="cb secret" onclick="unlockApp()">$</button>
+        <button class="cb zero" onclick="calcNum('0')">0</button>
+        <button class="cb" onclick="showAppInPage()">.</button>
+        <button class="cb eq" onclick="calcEquals()">=</button>
+      </div>
+    </div>
+    
+    <!-- View 2: School Article -->
+    <div id="main-article-view" class="disguise-view disguise-article" onclick="cycleDisguise('main')">
+      <h4>The Case for School Uniforms</h4>
+      <p>Research suggests that school uniforms can lead to improved academic performance. By reducing distractions related to fashion and social status, students are better able to focus on their studies.</p>
+      <p>Furthermore, uniforms promote a sense of equality. Students from various socioeconomic backgrounds are dressed identically, which fosters community spirit and reduces instances of peer pressure or bullying based on clothing choices.</p>
+      <p>In conclusion, the implementation of uniforms creates a professional environment that prepares students for future success in the workplace.</p>
+    </div>
+
+    <!-- View 3: Molecule Science -->
+    <div id="main-science-view" class="disguise-view molecule-container" onclick="cycleDisguise('main')">
+      <svg class="molecule-svg" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="10" fill="#ff4444" />
+        <line x1="50" y1="50" x2="20" y2="20" stroke="#333" stroke-width="2" />
+        <circle cx="20" cy="20" r="8" fill="#4444ff" />
+        <line x1="50" y1="50" x2="80" y2="20" stroke="#333" stroke-width="2" />
+        <circle cx="80" cy="20" r="8" fill="#4444ff" />
+        <line x1="50" y1="50" x2="50" y2="85" stroke="#333" stroke-width="2" />
+        <circle cx="50" cy="85" r="8" fill="#44dd44" />
+      </svg>
+      <div class="molecule-label">C6H12O6 (Glucose)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ MAIN APP ═══════════════ -->
+<div id="app-screen" style="display:none; flex-direction:row; height:100vh;">
+  <!-- Calculator Trigger -->
+  <button class="calc-trigger" onclick="toggleCalcOverlay(true)">
+    <svg viewBox="0 0 24 24">
+      <path d="M19,2H5A2,2 0 0,0 3,4V20A2,2 0 0,0 5,22H19A2,2 0 0,0 21,20V4A2,2 0 0,0 19,2M19,20H5V4H19V20M7,6H17V8H7V6M7,10H9V12H7V10M11,10H13V12H11V10M15,10H17V12H15V10M7,14H9V16H7V14M11,14H13V16H11V14M15,14H17V16H15V14M7,18H9V20H7V18M11,18H13V20H11V18M15,18H17V20H15V18Z" />
+    </svg>
+    <span>Calculator</span>
+  </button>
+
+  <!-- Calculator Overlay -->
+  <div id="calc-overlay">
+    <div class="calc-overlay-close" onclick="toggleCalcOverlay(false)">×</div>
+    <div class="calc-wrap" id="calc-wrap-overlay" style="transform: scale(1.1);">
+      <!-- View 1: Standard Calculator -->
+      <div id="overlay-calc-view" class="disguise-content active">
+        <div class="calc-display">
+          <div class="sub" id="calc-main-overlay-sub"></div>
+          <div class="main" id="calc-main-overlay">0</div>
+        </div>
+        <div class="calc-grid">
+          <button class="cb clear" onclick="calcClear('overlay')">AC</button>
+          <button class="cb del" onclick="calcDel('overlay')">⌫</button>
+          <button class="cb op" onclick="calcOp('%', 'overlay')">%</button>
+          <button class="cb op" onclick="calcOp('/', 'overlay')">÷</button>
+          <button class="cb" onclick="calcNum('7', 'overlay')">7</button>
+          <button class="cb" onclick="calcNum('8', 'overlay')">8</button>
+          <button class="cb" onclick="calcNum('9', 'overlay')">9</button>
+          <button class="cb op" onclick="calcOp('*', 'overlay')">×</button>
+          <button class="cb" onclick="calcNum('4', 'overlay')">4</button>
+          <button class="cb" onclick="calcNum('5', 'overlay')">5</button>
+          <button class="cb" onclick="calcNum('6', 'overlay')">6</button>
+          <button class="cb op" onclick="cycleDisguise('overlay')">−</button>
+          <button class="cb" onclick="calcNum('1', 'overlay')">1</button>
+          <button class="cb" onclick="calcNum('2', 'overlay')">2</button>
+          <button class="cb" onclick="calcNum('3', 'overlay')">3</button>
+          <button class="cb op" onclick="calcOp('+', 'overlay')">+</button>
+          <div style="grid-column: span 1;"></div>
+          <button class="cb zero" onclick="calcNum('0', 'overlay')">0</button>
+          <button class="cb" onclick="calcNum('.', 'overlay')">.</button>
+          <button class="cb eq" onclick="calcEquals('overlay')">=</button>
+        </div>
+      </div>
+      
+      <!-- View 2: School Article -->
+      <div id="overlay-article-view" class="disguise-view disguise-article" onclick="cycleDisguise('overlay')">
+        <h4>The Case for School Uniforms</h4>
+        <p>Research suggests that school uniforms can lead to improved academic performance. By reducing distractions related to fashion and social status, students are better able to focus on their studies.</p>
+        <p>Furthermore, uniforms promote a sense of equality. Students from various socioeconomic backgrounds are dressed identically, which fosters community spirit and reduces instances of peer pressure or bullying based on clothing choices.</p>
+        <p>In conclusion, the implementation of uniforms creates a professional environment that prepares students for future success in the workplace.</p>
+      </div>
+
+      <!-- View 3: Molecule Science -->
+      <div id="overlay-science-view" class="disguise-view molecule-container" onclick="cycleDisguise('overlay')">
+        <svg class="molecule-svg" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="10" fill="#ff4444" />
+          <line x1="50" y1="50" x2="20" y2="20" stroke="#333" stroke-width="2" />
+          <circle cx="20" cy="20" r="8" fill="#4444ff" />
+          <line x1="50" y1="50" x2="80" y2="20" stroke="#333" stroke-width="2" />
+          <circle cx="80" cy="20" r="8" fill="#4444ff" />
+          <line x1="50" y1="50" x2="50" y2="85" stroke="#333" stroke-width="2" />
+          <circle cx="50" cy="85" r="8" fill="#44dd44" />
+        </svg>
+        <div class="molecule-label">C6H12O6 (Glucose)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-logo">⚡ MasterCheats</div>
+    <div class="sidebar-nav">
+      <button class="nav-btn active" id="nav-ai" onclick="switchPanel('ai')">
+        <span class="icon">🤖</span> AI Chat
+        <span class="tag green ml-auto">FREE</span>
+      </button>
+      <button class="nav-btn" id="nav-humanizer" onclick="switchPanel('humanizer')">
+        <span class="icon">✍️</span> AI Humanizer
+        <span class="tag purple ml-auto">NEW</span>
+      </button>
+      <button class="nav-btn" id="nav-qs" onclick="switchPanel('qs')">
+        <span class="icon">🔍</span> Q&amp;A Search
+        <span class="tag blue ml-auto">AI</span>
+      </button>
+      <button class="nav-btn" id="nav-easemate" onclick="switchPanel('easemate')">
+        <span class="icon">✨</span> Easemate
+        <span class="tag green ml-auto">WEB</span>
+      </button>
+      <button class="nav-btn" id="nav-identify" onclick="switchPanel('identify')">
+        <span class="icon">📸</span> Identify Answers
+        <span class="tag purple ml-auto">OCR</span>
+      </button>
+      <button class="nav-btn" id="nav-math" onclick="switchPanel('math')">
+        <span class="icon">📈</span> Math Pro
+        <span class="tag purple ml-auto">GRAPH</span>
+      </button>
+      <button class="nav-btn" id="nav-link" onclick="switchPanel('link')">
+        <span class="icon">🔗</span> Site Searcher
+        <span class="tag blue ml-auto">DEEP</span>
+      </button>
+      <button class="nav-btn" id="nav-proxy" onclick="switchPanel('proxy')">
+        <span class="icon">🌐</span> Proxy Browser
+        <span class="tag green ml-auto">UNLOCKED</span>
+      </button>
+      <button class="nav-btn" id="nav-blank" onclick="switchPanel('blank')">
+        <span class="icon">📑</span> Blank Opener
+        <span class="tag purple ml-auto">CLOAK</span>
+      </button>
+      <button class="nav-btn" id="nav-html" onclick="switchPanel('html')">
+        <span class="icon">📄</span> HTML Opener
+        <span class="tag green ml-auto">EXEC</span>
+      </button>
+      <button class="nav-btn" id="nav-image" onclick="switchPanel('image')">
+        <span class="icon">🎨</span> Image Gen
+        <span class="tag blue ml-auto">FREE</span>
+      </button>
+      <button class="nav-btn" id="nav-exploits" onclick="switchPanel('exploits')">
+        <span class="icon">🧨</span> Exploits
+        <span class="tag crimson ml-auto">CORE</span>
+      </button>
+      <button class="nav-btn" id="nav-notes" onclick="switchPanel('notes')">
+        <span class="icon">📝</span> Study Notes
+        <span class="tag green ml-auto">NEW</span>
+      </button>
+      <button class="nav-btn" id="nav-pip" onclick="enterPiPMode()">
+        <span class="icon">📺</span> PiP Mode
+        <span class="tag purple ml-auto">FLOAT</span>
+      </button>
+      <button class="nav-btn" id="nav-settings" onclick="switchPanel('settings')">
+        <span class="icon">⚙️</span> Settings
+      </button>
+    </div>
+    <div class="sidebar-footer">
+      <div class="api-badge">System Status: Optimal</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <span id="topbar-title" class="topbar-title">🤖 AI Chat</span>
+      <span class="topbar-sub">Ultra-Fast v3.3 · Performance Mode</span>
+    </div>
+
+    <!-- AI CHAT PANEL -->
+    <div class="panel active" id="panel-ai">
+      <div class="chat-messages" id="chat-messages">
+        <div class="msg ai">
+          <div class="msg-avatar">🤖</div>
+          <div class="msg-bubble">
+            Hey! I'm your <strong>Master Cheats AI</strong>. Ask me anything — homework, code, essays, explanations, you name it. I'm completely free and unlimited. 🚀
+          </div>
+        </div>
+      </div>
+      <div class="chat-input-area">
+        <textarea class="chat-input" id="chat-input" rows="1" placeholder="Ask me anything..." onkeydown="chatKeydown(event)" oninput="autoResize(this)"></textarea>
+        <button class="send-btn" id="chat-send" onclick="sendChat()">➤</button>
+      </div>
+    </div>
+
+    <!-- HUMANIZER PANEL -->
+    <div class="panel" id="panel-humanizer">
+      <div class="humanizer-controls">
+        <span style="font-size:13px;color:#666;font-weight:600;">Mode:</span>
+        <button class="mode-chip active" onclick="setMode(this,'standard')">Standard</button>
+        <button class="mode-chip" onclick="setMode(this,'casual')">Casual</button>
+        <button class="mode-chip" onclick="setMode(this,'school')">School Kid</button>
+        <button class="mode-chip" onclick="setMode(this,'academic')">Academic</button>
+        <button class="mode-chip" onclick="setMode(this,'creative')">Creative</button>
+      </div>
+      <div class="humanizer-grid">
+        <div class="hbox">
+          <div class="hbox-header">
+            <div class="dot" style="background:#f87171"></div>
+            AI-Generated Text
+          </div>
+          <textarea class="hbox" id="human-input" style="flex:1;background:transparent;border:none;outline:none;color:#d1d5db;font-size:14px;line-height:1.8;padding:16px;resize:none;font-family:'Inter',sans-serif;" placeholder="Paste your AI-generated text here..."></textarea>
+          <div class="hbox-footer">
+            <span class="word-count" id="human-wc">0 words</span>
+            <button class="humanize-btn" id="human-btn" onclick="runHumanizer()">✨ Humanize</button>
+          </div>
+        </div>
+        <div class="hbox">
+          <div class="hbox-header">
+            <div class="dot" style="background:#4ade80"></div>
+            Humanized Output
+          </div>
+          <textarea id="human-output" style="flex:1;background:transparent;border:none;outline:none;color:#d1d5db;font-size:14px;line-height:1.8;padding:16px;resize:none;font-family:'Inter',sans-serif;" placeholder="Your humanized text will appear here..." readonly></textarea>
+          <div class="hbox-footer">
+            <span class="word-count" id="human-out-wc">0 words</span>
+            <button class="copy-btn" onclick="copyHuman()">📋 Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Q&A SEARCH PANEL -->
+    <div class="panel" id="panel-qs">
+      <div class="qs-wrap">
+        <div class="qs-search-row">
+          <input type="text" class="qs-input" id="qs-input" placeholder="Type a question and get a detailed answer..." onkeydown="qsKeydown(event)"/>
+          <button class="qs-btn" id="qs-btn" onclick="runQS()">Search</button>
+        </div>
+        <div class="qs-results" id="qs-results">
+          <div class="qs-placeholder">
+            <div class="big">🔍</div>
+            <p>Type any question above and hit Search</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EASEMATE PANEL -->
+    <div class="panel" id="panel-easemate" style="height: 100%;">
+      <iframe src="https://www.easemate.ai/ai-chat" style="width: 100%; height: 100%; border: none;" allow="clipboard-read; clipboard-write; microphone; camera"></iframe>
+    </div>
+
+    <!-- MATH PRO PANEL -->
+    <div class="panel" id="panel-math" style="height: 100%;">
+      <iframe src="https://www.desmos.com/calculator" style="width: 100%; height: 100%; border: none; filter: invert(0.9) hue-rotate(180deg) brightness(1.2);"></iframe>
+    </div>
+
+    <!-- IDENTIFY ANSWERS PANEL -->
+    <div class="panel" id="panel-identify">
+      <div class="qs-wrap" style="padding: 0; gap: 0;">
+        <div id="photomath-ui" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+          
+          <!-- Top Area: Upload & Preview -->
+          <div style="height: 45%; background: #000; position: relative; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #1e1e2a;">
+            <input type="file" id="ocr-upload" accept="image/*" style="display: none;" onchange="handleOcrUpload(event)">
+            
+            <!-- Scanning Overlay UI -->
+            <div id="scanning-frame" style="position: absolute; width: 70%; height: 60%; border: 2px solid #a78bfa; border-radius: 12px; z-index: 5; box-shadow: 0 0 0 2000px rgba(0,0,0,0.5);">
+              <div style="position: absolute; top: -2px; left: -2px; width: 20px; height: 20px; border-top: 4px solid #fff; border-left: 4px solid #fff; border-top-left-radius: 4px;"></div>
+              <div style="position: absolute; top: -2px; right: -2px; width: 20px; height: 20px; border-top: 4px solid #fff; border-right: 4px solid #fff; border-top-right-radius: 4px;"></div>
+              <div style="position: absolute; bottom: -2px; left: -2px; width: 20px; height: 20px; border-bottom: 4px solid #fff; border-left: 4px solid #fff; border-bottom-left-radius: 4px;"></div>
+              <div style="position: absolute; bottom: -2px; right: -2px; width: 20px; height: 20px; border-bottom: 4px solid #fff; border-right: 4px solid #fff; border-bottom-right-radius: 4px;"></div>
+              <div id="scanning-bar" style="display:none; position: absolute; left: 0; right: 0; height: 2px; background: #a78bfa; box-shadow: 0 0 15px #a78bfa; animation: scanMove 2s infinite ease-in-out;"></div>
+            </div>
+
+            <img id="ocr-preview" style="display: none; width: 100%; height: 100%; object-fit: contain;">
+            
+            <label for="ocr-upload" id="ocr-empty-label" style="cursor: pointer; text-align: center; z-index: 10;">
+              <div style="font-size: 50px; margin-bottom: 10px;">📸</div>
+              <div style="font-size: 14px; font-weight: 800; color: #fff; letter-spacing: 1px;">TAP TO CAPTURE</div>
+              <div style="font-size: 11px; color: #666; margin-top: 4px;">UPLOAD QUESTION IMAGE</div>
+            </label>
+
+            <button onclick="document.getElementById('ocr-upload').click()" id="re-upload-btn" style="display:none; position: absolute; bottom: 15px; right: 15px; background: rgba(0,0,0,0.6); color: #fff; border: 1px solid #333; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; z-index: 10;">RE-TAKE</button>
+          </div>
+
+          <!-- Bottom Area: Steps & Results -->
+          <div style="flex: 1; background: #111117; display: flex; flex-direction: column; overflow-y: auto;">
+            <div id="ocr-results" style="padding: 20px;">
+              <div style="text-align: center; color: #444; margin-top: 40px;">
+                <div style="font-size: 24px; margin-bottom: 10px;">📐</div>
+                <div style="font-size: 13px; font-weight: 600;">Waiting for image...</div>
+                <div style="font-size: 11px; max-width: 200px; margin: 8px auto;">Upload a math problem or question for a step-by-step solution.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <style>
+        @keyframes scanMove { 0% { top: 0%; } 50% { top: 100%; } 100% { top: 0%; } }
+      </style>
+    </div>
+
+    <!-- STUDY NOTES PANEL -->
+    <div class="panel" id="panel-notes">
+      <div class="notes-container">
+        <div class="notes-list" id="notes-list">
+          <button class="humanize-btn" style="margin-bottom: 15px;" onclick="addNote()">+ New Note</button>
+          <!-- Note items will be injected here -->
+        </div>
+        <div class="note-editor">
+          <div class="note-header">
+            <input type="text" id="note-title" class="note-title-input" placeholder="Note Title..." oninput="saveCurrentNote()">
+            <button class="cb del" style="padding: 8px 12px; font-size: 12px;" onclick="deleteCurrentNote()">Delete</button>
+          </div>
+          <textarea id="note-body" class="note-content" placeholder="Start writing..." oninput="saveCurrentNote()"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- LINK ANALYZER PANEL -->
+    <div class="panel" id="panel-link">
+      <div class="qs-wrap">
+        <div class="qs-search-row">
+          <input type="text" id="link-input" class="qs-input" placeholder="Enter site URL (e.g. quizlet.com/12345/...)">
+          <button class="qs-btn" id="link-btn" onclick="analyzeLink()">Analyze</button>
+        </div>
+        <div class="qs-results" id="link-results">
+          <div class="qs-placeholder">
+            <div class="big">🕵️‍♂️</div>
+            <p>Enter a URL to perform a deep-corner analysis for answers</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROXY BROWSER PANEL -->
+    <div class="panel" id="panel-proxy">
+      <div class="qs-wrap" style="padding: 0; gap: 0;">
+        <div class="topbar" style="background: var(--sidebar-color); border-bottom: 1px solid var(--border-color); padding: 10px 20px;">
+          <input type="text" id="proxy-url" class="qs-input" style="flex: 1; height: 36px; font-size: 13px;" placeholder="https://example.com" onkeydown="if(event.key==='Enter') loadProxyUrl()">
+          <button class="qs-btn" style="height: 36px; padding: 0 15px; font-size: 12px; margin-left: 10px;" onclick="loadProxyUrl()">Unlock & Load</button>
+        </div>
+        <div id="proxy-container" style="flex: 1; background: #fff;">
+          <iframe is="x-frame-bypass" id="proxy-frame" style="width: 100%; height: 100%; border: none;"></iframe>
+        </div>
+      </div>
+    </div>
+
+    <!-- BLANK OPENER PANEL -->
+    <div class="panel" id="panel-blank">
+      <div class="qs-wrap">
+        <div class="hbox" style="padding: 30px; text-align: center; border-color: var(--accent-color); border-style: dashed;">
+          <div style="font-size: 40px; margin-bottom: 15px;">📑</div>
+          <h2 style="font-weight: 800; font-size: 18px; margin-bottom: 8px;">About:Blank Tab Opener</h2>
+          <p style="font-size: 13px; color: #666; margin-bottom: 24px;">Enter a URL below to open it inside a fresh about:blank tab. It will be named "Canvas" for maximum stealth.</p>
+          <div class="qs-search-row">
+            <input type="text" id="blank-url" class="qs-input" placeholder="https://quizlet.com">
+            <button class="qs-btn" onclick="openBlankLink()">Spawn Tab</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HTML OPENER PANEL -->
+    <div class="panel" id="panel-html">
+      <div class="qs-wrap" style="padding: 24px; gap: 20px;">
+        <div class="hbox" style="flex: 1; padding: 20px; gap: 15px; display: flex; flex-direction: column;">
+          <div style="font-size: 11px; font-weight: 800; color: var(--accent-color); letter-spacing: 1px;">PASTE HTML CODE</div>
+          <textarea id="html-code-input" class="chat-input" style="flex: 1; min-height: 200px; font-family: monospace; font-size: 12px;" placeholder="<!DOCTYPE html><html>...</html>"></textarea>
+          
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="font-size: 11px; font-weight: 800; color: #555; letter-spacing: 0.5px;">TAB NAME</div>
+            <input type="text" id="html-tab-name" class="qs-input" style="height: 40px; font-size: 13px;" placeholder="Canvas">
+            <button class="qs-btn" style="height: 45px; margin-top: 5px;" onclick="runHtmlOpener()">Spawn HTML Tab</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- IMAGE GEN PANEL -->
+    <div class="panel" id="panel-image">
+      <div class="qs-wrap" style="padding: 24px; gap: 20px;">
+        <div class="hbox" style="padding: 20px; gap: 12px;">
+          <div style="font-size: 11px; font-weight: 800; color: var(--accent-color); letter-spacing: 1px;">CREATE ARTWORK</div>
+          <textarea id="image-prompt" class="chat-input" style="min-height: 80px;" placeholder="A cyberpunk student studying in a neon library..."></textarea>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <select id="image-model" class="qs-input" style="flex: 1; height: 40px; font-size: 12px; background: #1a1a24;">
+              <option value="black-forest-labs/FLUX.1-schnell">Flux.1 Schnell (Best/Fast)</option>
+              <option value="stabilityai/stable-diffusion-xl-base-1.0">SDXL (Classic Pro)</option>
+              <option value="pollinations">Pollinations (Free Backup)</option>
+            </select>
+            <button id="image-gen-btn" class="qs-btn" style="height: 40px;" onclick="generateImage()">Generate</button>
+          </div>
+        </div>
+        <div id="image-output-container" style="flex: 1; background: #000; border-radius: 20px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; border: 1px solid var(--border-color);">
+          <div id="image-placeholder" style="text-align: center; color: #333;">
+            <div style="font-size: 50px; margin-bottom: 10px;">🖼️</div>
+            <p>Your generated image will appear here</p>
+          </div>
+          <img id="image-result" style="display: none; width: 100%; height: 100%; object-fit: contain;">
+          <div id="image-loader" style="display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.8); flex-direction: column; align-items: center; justify-content: center; gap: 15px;">
+            <div class="spinner" style="width: 40px; height: 40px;"></div>
+            <div style="font-size: 13px; color: #fff; font-weight: 700; letter-spacing: 1px;">PAINTING PIXELS...</div>
+          </div>
+        </div>
+        <button id="image-download" class="nav-btn" style="display: none; justify-content: center; background: #1a1a24; border: 1px solid #333;" onclick="downloadImage()">💾 Download Image</button>
+      </div>
+    </div>
+
+    <!-- EXPLOITS PANEL -->
+    <div class="panel" id="panel-exploits" style="position: relative;">
+      <!-- Mini Terminal Window -->
+      <div id="exploit-terminal" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:400px; height:260px; background:#000; color:#fff; font-family:monospace; padding:20px; z-index:100; font-size:12px; border: 1px solid #333; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); overflow-y: auto;"></div>
+      
+      <div class="settings-grid" style="padding: 24px; overflow-y: auto;">
+        
+        <!-- ROW 1: CRITICAL -->
+        <div class="settings-section">
+          <h3>Critical Exploits</h3>
+          <div class="theme-row" style="grid-template-columns: 1fr;">
+            <div class="hbox" style="padding: 20px; display: flex; flex-direction: row; align-items: center; gap: 20px; border-color: #451a1a;">
+               <div style="font-size: 32px;">💀</div>
+               <div style="flex: 1;">
+                 <div style="font-weight: 700; color: #f87171;">Crash Computer</div>
+                 <div style="font-size: 12px; color: #666;">Forces a system-level hang using a memory overflow payload.</div>
+               </div>
+               <button class="cb op" style="padding: 12px 24px; background: #ef4444; font-size: 12px; font-weight: 800;" onclick="runExploit('crash')">CRASH</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROW 2: STEALTH -->
+        <div class="settings-section">
+          <h3>Stealth Exploits</h3>
+          <div class="theme-row" style="grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="hbox" style="padding: 20px; gap: 10px;">
+               <div style="font-weight: 700; color: #60a5fa;">Fake History</div>
+               <div style="font-size: 12px; color: #666;">Hides your tracks with fake school history.</div>
+               <button class="cb" style="margin-top: 10px; font-size: 11px; padding: 10px;" onclick="runExploit('history')">START</button>
+            </div>
+            <div class="hbox" style="padding: 20px; gap: 10px;">
+               <div style="font-weight: 700; color: #4ade80;">Panic Button</div>
+               <div style="font-size: 12px; color: #666;">Redirect to Google Classroom immediately.</div>
+               <button class="cb" style="margin-top: 10px; font-size: 11px; padding: 10px;" onclick="runExploit('panic')">PANIC</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROW 3: BYPASS -->
+        <div class="settings-section">
+          <h3>Bypass Exploits</h3>
+          <div class="theme-row" style="grid-template-columns: 1fr;">
+            <div class="hbox" style="padding: 20px; gap: 15px;">
+               <div style="display: flex; justify-content: space-between; align-items: center;">
+                 <div style="font-weight: 700; color: #a78bfa;">Allow Copying</div>
+                 <span class="tag purple">INJECTOR</span>
+               </div>
+               <div style="font-size: 12px; color: #666;">Bypass right-click and copy protection on any website.</div>
+               <div style="background: #0d0d12; padding: 12px; border-radius: 10px; font-family: monospace; font-size: 11px; color: #4ade80; border: 1px solid #1e1e2a; word-break: break-all;">
+                 javascript:(function(){var e=function(e){e.stopPropagation();};["contextmenu","copy","cut","paste","mousedown","mouseup","beforecopy","beforecut"].forEach(function(t){document.addEventListener(t,e,!0);});alert("Unlocked!");})();
+               </div>
+               <button class="copy-btn" onclick="runExploit('copy', this)">COPY CODE</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SETTINGS PANEL -->
+    <div class="panel" id="panel-settings">
+      <div class="settings-grid">
+        <div class="settings-section">
+          <h3>Solid Themes</h3>
+          <div class="theme-row" id="solid-themes">
+            <!-- Theme cards injected here -->
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Liquid Glass Themes</h3>
+          <div class="theme-row" id="liquid-themes">
+            <!-- Liquid theme cards injected here -->
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>General Settings</h3>
+          <div class="hbox" style="padding: 20px; gap: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 14px; font-weight: 600;">Stealth Tab Name</div>
+                <div style="font-size: 12px; color: #666;">Changes the title when cloaked</div>
+              </div>
+              <input type="text" id="setting-tab-name" class="qs-input" style="width: 150px; padding: 8px 12px;" placeholder="Canvas" oninput="updateSettings()">
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 14px; font-weight: 600;">Stealth Favicon</div>
+                <div style="font-size: 12px; color: #666;">Changes the tab icon to a school app</div>
+              </div>
+              <select id="setting-favicon" class="qs-input" style="width: 150px; padding: 8px 12px; background: #1a1a24;" onchange="updateSettings()">
+                <option value="default">Default</option>
+                <option value="drive">Google Drive</option>
+                <option value="classroom">Google Classroom</option>
+                <option value="canvas">Canvas</option>
+              </select>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 14px; font-weight: 600;">AI Engine</div>
+                <div style="font-size: 12px; color: #666;">Choose the intelligence provider</div>
+              </div>
+              <select id="setting-ai-engine" class="qs-input" style="width: 150px; padding: 8px 12px; background: #1a1a24;" onchange="updateSettings()">
+                <option value="sambanova">SambaNova (405B Ultra-Smart)</option>
+                <option value="groq">Groq (Ultra-Fast)</option>
+                <option value="gemini">Gemini 2.0 (Free Proxy)</option>
+                <option value="pollinations">Pollinations (Key Applied)</option>
+                <option value="proxy">Public Proxy (No Key)</option>
+              </select>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 14px; font-weight: 600;">Default Disguise</div>
+                <div style="font-size: 12px; color: #666;">Which screen appears first?</div>
+              </div>
+              <select id="setting-default-disguise" class="qs-input" style="width: 150px; padding: 8px 12px; background: #1a1a24;" onchange="updateSettings()">
+                <option value="0">Calculator</option>
+                <option value="1">Uniform Article</option>
+                <option value="2">Science Molecule</option>
+              </select>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 14px; font-weight: 600;">Groq Speed Mode</div>
+                <div style="font-size: 12px; color: #666;">Optimizes for response latency</div>
+              </div>
+              <button class="mode-chip active">Enabled</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- API KEY MODAL -->
+<div class="modal-overlay" id="api-modal" style="display:none;">
+  <div class="modal">
+    <h2>⚡ API Keys Setup</h2>
+    <p>Master Cheats uses <strong>Pollinations.AI</strong> by default — completely free, no key needed!<br>
+    You can optionally add your own keys for premium providers.</p>
+
+    <label>OpenAI API Key (optional)</label>
+    <input type="password" id="key-openai" placeholder="sk-... (get free $5 at platform.openai.com)" />
+
+    <label>Google Gemini API Key (optional)</label>
+    <input type="password" id="key-gemini" placeholder="AIza... (free at aistudio.google.com)" />
+
+    <label>Groq API Key (optional)</label>
+    <input type="password" id="key-groq" placeholder="gsk_... (free at console.groq.com)" />
+
+    <label>SambaNova API Key (Fastest AI)</label>
+    <input type="password" id="key-samba" placeholder="... (free at cloud.sambanova.ai)" />
+
+    <label>Together AI Key (For Image Generation)</label>
+    <input type="password" id="key-together" placeholder="... (get at together.ai)" />
+
+    <div class="api-info">
+      🖼️ <strong>Together AI:</strong> Provides the best image quality (Flux.1).<br>
+      🚀 <strong>SambaNova:</strong> Get an unlimited free key at <a href="https://cloud.sambanova.ai/" target="_blank">cloud.sambanova.ai</a>
+    </div>
+
+    <div class="modal-btns">
+      <button class="modal-btn secondary" onclick="closeModal()">Skip — Use Free</button>
+      <button class="modal-btn primary" onclick="saveKeys()">Save Keys</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════
+   CALCULATOR LOGIC
+═══════════════════════════ */
+let calcStates = {
+  main: { display: '0', sub: '', op: null, prev: null, newNum: true },
+  overlay: { display: '0', sub: '', op: null, prev: null, newNum: true }
+};
+
+function updateCalc(mode = 'main') {
+  const state = calcStates[mode];
+  const mainId = mode === 'main' ? 'calc-main' : 'calc-main-overlay';
+  const subId = mode === 'main' ? 'calc-sub' : 'calc-main-overlay-sub';
+  document.getElementById(mainId).textContent = state.display;
+  document.getElementById(subId).textContent = state.sub;
+}
+
+function calcNum(n, mode = 'main') {
+  const state = calcStates[mode];
+  if (state.newNum) { state.display = n; state.newNum = false; }
+  else { state.display = state.display === '0' ? n : state.display + n; }
+  updateCalc(mode);
+}
+
+function calcDot(mode = 'main') {
+  const state = calcStates[mode];
+  if (state.newNum) { state.display = '0.'; state.newNum = false; }
+  else if (!state.display.includes('.')) state.display += '.';
+  updateCalc(mode);
+}
+
+function calcOp(op, mode = 'main') {
+  const state = calcStates[mode];
+  state.prev = parseFloat(state.display);
+  state.op = op;
+  state.sub = state.display + ' ' + {'*':'×','/':'÷','+':'+','-':'−','%':'%'}[op];
+  state.newNum = true;
+  updateCalc(mode);
+}
+
+function calcEquals(mode = 'main') {
+  const state = calcStates[mode];
+  if (state.op === null || state.prev === null) return;
+  const a = state.prev, b = parseFloat(state.display);
+  let res;
+  switch(state.op) {
+    case '+': res = a + b; break;
+    case '-': res = a - b; break;
+    case '*': res = a * b; break;
+    case '/': res = b === 0 ? 'Error' : a / b; break;
+    case '%': res = a % b; break;
+  }
+  state.sub = '';
+  state.display = typeof res === 'number' ? (parseFloat(res.toFixed(10)) + '') : res;
+  state.op = null; state.prev = null; state.newNum = true;
+  updateCalc(mode);
+}
+
+function calcClear(mode = 'main') {
+  calcStates[mode] = { display:'0', sub:'', op:null, prev:null, newNum:true };
+  updateCalc(mode);
+}
+
+function calcDel(mode = 'main') {
+  const state = calcStates[mode];
+  if (state.newNum) return;
+  state.display = state.display.length > 1 ? state.display.slice(0,-1) : '0';
+  updateCalc(mode);
+}
+
+function toggleCalcOverlay(show) {
+  document.getElementById('calc-overlay').style.display = show ? 'flex' : 'none';
+}
+
+let disguiseStates = { main: 0, overlay: 0 };
+function cycleDisguise(mode) {
+  disguiseStates[mode] = (disguiseStates[mode] + 1) % 3;
+  const state = disguiseStates[mode];
+  
+  const calcView = document.getElementById(`${mode}-calc-view`);
+  const articleView = document.getElementById(`${mode}-article-view`);
+  const scienceView = document.getElementById(`${mode}-science-view`);
+  const wrap = document.getElementById(`calc-wrap-${mode}`);
+
+  // Hide all
+  calcView.style.display = 'none';
+  articleView.style.display = 'none';
+  scienceView.style.display = 'none';
+  wrap.style.background = '#222228'; // Default calc bg
+
+  if (state === 0) {
+    calcView.style.display = 'block';
+  } else if (state === 1) {
+    articleView.style.display = 'block';
+    wrap.style.background = '#fff';
+  } else if (state === 2) {
+    scienceView.style.display = 'flex';
+    wrap.style.background = '#f8f9fa';
+  }
+}
+
+/* ═══════════════════════════
+   UNLOCK / CLOAK
+═══════════════════════════ */
+function unlockApp() {
+  const tabName = localStorage.getItem('settings_tab_name') || 'Canvas';
+  // Cloak tab: write full app into about:blank popup
+  try {
+    const w = window.open('about:blank', '_blank');
+    if (!w) throw new Error('blocked');
+
+    const fullHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>${tabName}</title>
+  ${document.head.innerHTML}
+</head>
+<body>
+${document.body.innerHTML}
+<script>
+  var apiKeys={
+    openai:'',
+    gemini:'',
+    groq:'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',
+    pollinations:'sk_ZBaiVFeoEZwi930fI5IWnGtblqcz5hVg',
+    sambanova:'5be2a2f2-29db-4824-bd3a-8f2afdcf2902',
+    together:'tgp_v1_uQn3DSuG4JMTtiCOeLW440BynU97mt0JkAZrcod0xN4'
+  };
+  var chatHistory=[];
+  var humanizerMode='standard';
+  document.title='${tabName}';
+  if(window.initThemes) initThemes();
+  if(window.renderNotes) renderNotes();
+  
+  document.getElementById('calc-screen').style.display='none';
+  if(window.startBootSequence) {
+    window.startBootSequence(function() {
+      document.getElementById('app-screen').style.display='flex';
+      // Ensure overlay is hidden initially
+      if(document.getElementById('calc-overlay')) document.getElementById('calc-overlay').style.display='none';
+    });
+  } else {
+    document.getElementById('app-screen').style.display='flex';
+  }
+<\/script>
+</body></html>`;
+
+    w.document.open();
+    w.document.write(fullHTML);
+    w.document.close();
+    return;
+  } catch(e) {}
+  showAppInPage();
+}
+
+function showAppInPage() {
+  const tabName = localStorage.getItem('settings_tab_name') || 'Canvas';
+  document.getElementById('calc-screen').style.display = 'none';
+  startBootSequence(() => {
+    document.getElementById('app-screen').style.display = 'flex';
+    document.title = tabName;
+    try { history.pushState(null, '', 'about:blank'); } catch(e) {}
+  });
+}
+
+function startBootSequence(callback) {
+  const bootScreen = document.getElementById('boot-screen');
+  const terminal = document.getElementById('boot-terminal');
+  bootScreen.style.display = 'block';
+  terminal.innerHTML = '';
+  
+  const lines = [
+    "MASTER CHEATS [Version 3.4.1] BOOTLOADER",
+    "(C) 2026 MC SECURITY CORE. ALL RIGHTS RESERVED.",
+    "",
+    "[ INIT ] Starting system kernel...",
+    "[ KERN ] CPU: 16-Core Ultra-Fast Llama-Inference-Engine",
+    "[ KERN ] Memory: 128GB Unified AI-Cache initialized",
+    "[ DISK ] Checking file system integrity... OK",
+    "[ DISK ] Mounting /var/ai/brain... OK",
+    "[ DISK ] Mounting /usr/bin/exploits... OK",
+    "[ NET  ] Initializing encrypted proxy tunnel... CONNECTED",
+    "[ NET  ] Securing socket layer with 4096-bit RSA...",
+    "[ OK   ] RSA Key exchange successful.",
+    "[ AUTH ] Loading encrypted credentials... OK",
+    "[ SYS  ] Starting IdentifyAnswers OCR service...",
+    "[ OK   ] OCR Engine: Tesseract v5.0 ready.",
+    "[ SYS  ] Starting Unified-Groq AI link...",
+    "[ OK   ] Groq API Response: 0.04ms latency.",
+    "[ SYS  ] Initializing Liquid Glass UI shaders...",
+    "[ OK   ] Liquid Shaders: Vulkan/GL Hybrid mode.",
+    "[ SYS  ] Deploying Stealth-Guard layer...",
+    "[ OK   ] Guard Active: Tab title spoofing enabled.",
+    "",
+    "BOOT COMPLETE. LAUNCHING GUI...",
+    "root@master-cheats:~# ./master_gui --cloak --force"
+  ];
+
+  let i = 0;
+  function addLine() {
+    if (i < lines.length) {
+      const line = document.createElement('div');
+      line.className = 'boot-line';
+      line.style.opacity = '0';
+      line.style.transform = 'translateY(5px)';
+      line.style.transition = 'all 0.1s';
+      
+      let content = lines[i];
+      if (content.includes('[ OK   ]')) {
+        content = content.replace('[ OK   ]', '[ <span style="color:#4ade80;font-weight:bold;"> OK </span> ]');
+      } else if (content.includes('[ INIT ]') || content.includes('[ KERN ]')) {
+        content = `<span style="color:#60a5fa;">${content}</span>`;
+      }
+      
+      line.innerHTML = content;
+      terminal.appendChild(line);
+      
+      // Force reflow and animate
+      setTimeout(() => {
+        line.style.opacity = '1';
+        line.style.transform = 'translateY(0)';
+      }, 10);
+      
+      i++;
+      
+      // Random white flicker - improved
+      if (Math.random() > 0.88) {
+        bootScreen.classList.add('flicker-active');
+        setTimeout(() => bootScreen.classList.remove('flicker-active'), 60);
+      }
+      
+      setTimeout(addLine, Math.random() * 80 + 20); // Faster boot
+    } else {
+      setTimeout(() => {
+        bootScreen.style.display = 'none';
+        callback();
+      }, 600);
+    }
+  }
+  addLine();
+}
+
+/* ═══════════════════════════
+   CONFIG & KEYS
+═══════════════════════════ */
+let apiKeys = { 
+  openai: '', 
+  gemini: '', 
+  groq: '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',
+  pollinations: 'sk_ZBaiVFeoEZwi930fI5IWnGtblqcz5hVg',
+  sambanova: '5be2a2f2-29db-4824-bd3a-8f2afdcf2902',
+  together: 'tgp_v1_uQn3DSuG4JMTtiCOeLW440BynU97mt0JkAZrcod0xN4'
+};
+
+/* ═══════════════════════════
+   MODAL (DISABLED)
+═══════════════════════════ */
+function showApiModal() {
+  // Modal disabled as keys are provided
+  console.log('API Keys ready.');
+}
+window.showApiModal = showApiModal;
+
+function closeModal() {
+  document.getElementById('api-modal').style.display = 'none';
+}
+function saveKeys() {
+  apiKeys.openai = document.getElementById('key-openai').value.trim();
+  apiKeys.gemini = document.getElementById('key-gemini').value.trim();
+  apiKeys.groq   = document.getElementById('key-groq').value.trim();
+  apiKeys.sambanova = document.getElementById('key-samba').value.trim();
+  apiKeys.together = document.getElementById('key-together').value.trim();
+  closeModal();
+}
+
+/* ═══════════════════════════
+   PANEL SWITCHING
+═══════════════════════════ */
+const panelTitles = { 
+  ai:'🤖 AI Chat', 
+  humanizer:'✍️ AI Humanizer', 
+  qs:'🔍 Q&A Search', 
+  easemate:'✨ Easemate', 
+  identify:'📸 Identify Answers',
+  math: '📈 Math Pro',
+  link: '🔗 Site Searcher',
+  proxy: '🌐 Proxy Browser',
+  blank: '📑 Blank Opener',
+  html: '📄 HTML Opener',
+  image: '🎨 Image Generator',
+  exploits: '🧨 Exploits',
+  notes:'📝 Study Notes',
+  settings:'⚙️ Settings'
+};
+
+function openBlankLink() {
+  const url = document.getElementById('blank-url').value.trim();
+  if (!url) return;
+  const targetUrl = url.startsWith('http') ? url : 'https://' + url;
+  
+  const tabName = localStorage.getItem('settings_tab_name') || 'Canvas';
+  const win = window.open('about:blank', '_blank');
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>${tabName}</title>
+        <style>
+          body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
+          iframe { width: 100%; height: 100%; border: none; }
+        </style>
+      </head>
+      <body>
+        <iframe src="${targetUrl}"></iframe>
+      </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+function runHtmlOpener() {
+  const html = document.getElementById('html-code-input').value;
+  let tabName = document.getElementById('html-tab-name').value.trim();
+  if (!tabName) tabName = "Canvas";
+  
+  const win = window.open('about:blank', '_blank');
+  if (win) {
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.document.title = tabName;
+  } else {
+    alert("Popup blocked! Please allow popups for this site.");
+  }
+}
+
+async function enterPiPMode() {
+  if ('documentPictureInPicture' in window) {
+    try {
+      const pipWindow = await window.documentPictureInPicture.requestWindow({
+        width: 400,
+        height: 600,
+      });
+
+      // Copy styles
+      [...document.styleSheets].forEach((styleSheet) => {
+        try {
+          const cssRules = [...styleSheet.cssRules].map((rule) => rule.cssText).join('');
+          const style = document.createElement('style');
+          style.textContent = cssRules;
+          pipWindow.document.head.appendChild(style);
+        } catch (e) {
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.type = styleSheet.type;
+          link.media = styleSheet.media;
+          link.href = styleSheet.href;
+          pipWindow.document.head.appendChild(link);
+        }
+      });
+      
+      // Copy tailwind script
+      const tw = document.createElement('script');
+      tw.src = "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4";
+      pipWindow.document.head.appendChild(tw);
+
+      // Move App Screen
+      const appScreen = document.getElementById('app-screen');
+      const originParent = appScreen.parentElement;
+      const originNextSibling = appScreen.nextSibling;
+      
+      pipWindow.document.body.append(appScreen);
+      appScreen.style.display = 'flex';
+      
+      // Show disguise on main window
+      document.getElementById('calc-screen').style.display = 'flex';
+
+      // Handle closing
+      pipWindow.addEventListener("pagehide", (event) => {
+        if (originNextSibling) {
+          originParent.insertBefore(appScreen, originNextSibling);
+        } else {
+          originParent.append(appScreen);
+        }
+        document.getElementById('calc-screen').style.display = 'none';
+        appScreen.style.display = 'flex';
+      });
+
+    } catch (err) {
+      console.error(err);
+      alert("Failed to enter PiP mode.");
+    }
+  } else {
+    // Fallback: Just make it a small floating window in current tab
+    const app = document.getElementById('app-screen');
+    if (app.classList.contains('pip-fallback')) {
+      app.classList.remove('pip-fallback');
+      app.style.width = '100%';
+      app.style.height = '100vh';
+      app.style.position = 'relative';
+      app.style.top = '0';
+      app.style.right = '0';
+      app.style.borderRadius = '0';
+      app.style.boxShadow = 'none';
+      app.style.border = 'none';
+    } else {
+      app.classList.add('pip-fallback');
+      app.style.width = '350px';
+      app.style.height = '500px';
+      app.style.position = 'fixed';
+      app.style.bottom = '20px';
+      app.style.right = '20px';
+      app.style.borderRadius = '20px';
+      app.style.boxShadow = '0 20px 60px rgba(0,0,0,0.8)';
+      app.style.border = '1px solid #333';
+      app.style.zIndex = '5000';
+      document.getElementById('calc-screen').style.display = 'flex';
+    }
+  }
+}
+
+async function generateImage() {
+  const prompt = document.getElementById('image-prompt').value.trim();
+  if (!prompt) return;
+
+  const btn = document.getElementById('image-gen-btn');
+  const loader = document.getElementById('image-loader');
+  const resultImg = document.getElementById('image-result');
+  const placeholder = document.getElementById('image-placeholder');
+  const downloadBtn = document.getElementById('image-download');
+  const modelChoice = document.getElementById('image-model').value;
+
+  btn.disabled = true;
+  loader.style.display = 'flex';
+  placeholder.style.display = 'none';
+  resultImg.style.display = 'none';
+  downloadBtn.style.display = 'none';
+
+  try {
+    let finalSrc = "";
+    const seed = Math.floor(Math.random() * 9999999);
+
+    if (modelChoice === 'pollinations' || !apiKeys.together) {
+      // Direct GET method for Pollinations - Truly Unlimited & Fast
+      finalSrc = `https://pollinations.ai/p/${encodeURIComponent(prompt)}?width=1024&height=1024&seed=${seed}&model=flux&nologo=true`;
+    } else {
+      // Use Together AI with Flux.1 (Using CORS Proxy)
+      try {
+        const corsProxy = "https://corsproxy.io/?";
+        const response = await fetch(corsProxy + encodeURIComponent('https://api.together.xyz/v1/images/generations'), {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKeys.together}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: modelChoice,
+            prompt: prompt,
+            width: 1024,
+            height: 1024,
+            steps: 4,
+            n: 1
+          })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          finalSrc = data.data[0].url || (data.data[0].b64_json ? `data:image/png;base64,${data.data[0].b64_json}` : "");
+        } else {
+          throw new Error('Together API error');
+        }
+      } catch (e) {
+        // Together failed, use the best Pollinations mirror (CORS friendly)
+        finalSrc = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&seed=${seed}&model=flux`;
+      }
+    }
+
+    resultImg.src = finalSrc;
+    await new Promise((res, rej) => {
+      resultImg.onload = res;
+      resultImg.onerror = () => rej(new Error("Image Load Failed"));
+      setTimeout(() => rej(new Error("Timeout")), 20000);
+    });
+
+    resultImg.style.display = 'block';
+    downloadBtn.style.display = 'flex';
+  } catch (err) {
+    console.error(err);
+    placeholder.style.display = 'block';
+    placeholder.innerHTML = `<div style="color:#f87171">⚠️ Generation Timeout. Try again.</div>`;
+  } finally {
+    btn.disabled = false;
+    loader.style.display = 'none';
+  }
+}
+
+function downloadImage() {
+  const src = document.getElementById('image-result').src;
+  const link = document.createElement('a');
+  link.href = src;
+  link.download = 'generated-artwork.png';
+  link.click();
+}
+
+function loadProxyUrl() {
+  const url = document.getElementById('proxy-url').value.trim();
+  if (!url) return;
+  const frame = document.getElementById('proxy-frame');
+  frame.src = url.startsWith('http') ? url : 'https://' + url;
+}
+function switchPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  document.getElementById('topbar-title').textContent = panelTitles[name];
+}
+
+/* ═══════════════════════════
+   UNIFIED AI API (WITH CORS PROXY)
+═══════════════════════════ */
+async function unifiedChat(messages, systemPrompt) {
+  const sys = systemPrompt || 'You are a helpful, smart, and concise AI assistant called MasterCheats AI.';
+  const engine = localStorage.getItem('settings_ai_engine') || 'groq';
+  const corsProxy = "https://corsproxy.io/?";
+
+  // 1. Groq
+  if (engine === 'groq' && apiKeys.groq) {
+    try {
+      const res = await fetch(corsProxy + encodeURIComponent('https://api.groq.com/openai/v1/chat/completions'), {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKeys.groq}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'system', content: sys }, ...messages], temperature: 0.7 })
+      });
+      if (res.ok) { const data = await res.json(); return data.choices[0].message.content; }
+    } catch (e) {}
+  }
+
+  // 2. SambaNova
+  if (engine === 'sambanova' && apiKeys.sambanova) {
+    try {
+      const res = await fetch(corsProxy + encodeURIComponent('https://api.sambanova.ai/v1/chat/completions'), {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKeys.sambanova}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'Meta-Llama-3.1-405B-Instruct', messages: [{ role: 'system', content: sys }, ...messages], temperature: 0.3 })
+      });
+      if (res.ok) { const data = await res.json(); return data.choices[0].message.content; }
+    } catch (e) {}
+  }
+
+  // 3. Gemini / Pollinations (CORS Friendly)
+  try {
+    const res = await fetch('https://text.pollinations.ai/openai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: engine === 'gemini' ? 'gemini' : (engine === 'proxy' ? 'p1' : 'openai'),
+        messages: [{ role: 'system', content: sys }, ...messages],
+        seed: Math.floor(Math.random()*9999)
+      })
+    });
+    if (res.ok) { const data = await res.json(); return data.choices[0].message.content; }
+  } catch (e) {}
+
+  throw new Error('All AI engines failed. Check your connection.');
+}
+
+/* ═══════════════════════════
+   AI CHAT
+═══════════════════════════ */
+let chatHistory = [];
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+function chatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+}
+
+function appendMsg(role, html) {
+  const wrap = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'msg ' + (role === 'user' ? 'user' : 'ai');
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  avatar.textContent = role === 'user' ? '👤' : '🤖';
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.innerHTML = html;
+  div.appendChild(avatar);
+  div.appendChild(bubble);
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+  return bubble;
+}
+
+function formatAIText(text) {
+  return text
+    .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre>$2</pre>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  input.value = '';
+  input.style.height = 'auto';
+  document.getElementById('chat-send').disabled = true;
+
+  appendMsg('user', msg.replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+  chatHistory.push({ role: 'user', content: msg });
+
+  // Typing indicator
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'msg ai';
+  typingDiv.innerHTML = '<div class="msg-avatar">🤖</div><div class="msg-bubble"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
+  document.getElementById('chat-messages').appendChild(typingDiv);
+  document.getElementById('chat-messages').scrollTop = 99999;
+
+  try {
+    const reply = await unifiedChat(chatHistory,
+      'You are MasterCheats AI — a brilliant, witty assistant that helps with homework, essays, code, questions, and anything else. Be concise but thorough. Format code in triple backticks.');
+    typingDiv.remove();
+    chatHistory.push({ role: 'assistant', content: reply });
+    appendMsg('ai', formatAIText(reply));
+  } catch(e) {
+    typingDiv.remove();
+    appendMsg('ai', '⚠️ Error connecting to AI. Check your connection and try again.');
+  }
+  document.getElementById('chat-send').disabled = false;
+}
+
+/* ═══════════════════════════
+   HUMANIZER
+═══════════════════════════ */
+let humanizerMode = 'standard';
+
+function setMode(el, mode) {
+  document.querySelectorAll('.mode-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  humanizerMode = mode;
+}
+
+document.getElementById('human-input').addEventListener('input', function() {
+  const wc = this.value.trim().split(/\s+/).filter(Boolean).length;
+  document.getElementById('human-wc').textContent = wc + ' words';
+});
+
+async function runHumanizer() {
+  const text = document.getElementById('human-input').value.trim();
+  if (!text) return;
+  const btn = document.getElementById('human-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Humanizing...';
+  document.getElementById('human-output').value = '';
+
+  const modeInstructions = {
+    standard: 'Rewrite it naturally, like a real person wrote it.',
+    casual: 'Rewrite it in a casual, conversational, friendly tone.',
+    school: 'Rewrite it like a 6th grade school kid. Use simple vocabulary, short sentences, and make a few minor spelling or grammar mistakes. DO NOT use slang. Keep the writing short and basic.',
+    academic: 'Rewrite it in a formal academic tone with varied sentence structure.',
+    creative: 'Rewrite it creatively with vivid, engaging language.'
+  };
+
+  const systemPrompt = `You are an expert text humanizer. Your ONLY job is to rewrite AI-generated text so it sounds 100% human-written. 
+Rules:
+- Keep all the original facts and meaning
+- Vary sentence lengths dramatically
+- Use natural transitions
+- Avoid robotic, repetitive patterns
+- Add subtle imperfections humans use
+- ${modeInstructions[humanizerMode]}
+- Output ONLY the rewritten text, no explanations or meta-commentary.`;
+
+  try {
+    const result = await unifiedChat([{ role: 'user', content: 'Humanize this text:\n\n' + text }], systemPrompt);
+    document.getElementById('human-output').value = result;
+    const wc = result.trim().split(/\s+/).filter(Boolean).length;
+    document.getElementById('human-out-wc').textContent = wc + ' words';
+  } catch(e) {
+    document.getElementById('human-output').value = 'Error: Could not connect. Please try again.';
+  }
+  btn.disabled = false;
+  btn.textContent = '✨ Humanize';
+}
+
+function copyHuman() {
+  const text = document.getElementById('human-output').value;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => btn.textContent = '📋 Copy', 1500);
+  });
+}
+
+/* ═══════════════════════════
+   QUESTION SEARCHER
+═══════════════════════════ */
+function qsKeydown(e) {
+  if (e.key === 'Enter') runQS();
+}
+
+async function runQS() {
+  const q = document.getElementById('qs-input').value.trim();
+  if (!q) return;
+  const btn = document.getElementById('qs-btn');
+  btn.disabled = true;
+  btn.textContent = '🔍...';
+  const resultsEl = document.getElementById('qs-results');
+  resultsEl.innerHTML = '<div style="display:flex;align-items:center;gap:12px;color:#666;padding:20px;"><div class="spinner"></div> Searching for answer...</div>';
+
+  const systemPrompt = `You are an expert Q&A assistant. When given a question:
+1. Identify the exact question
+2. Give a thorough, accurate, well-structured answer
+3. If it's a multiple-choice question, identify the correct answer and explain why
+4. Format: Start with a clear direct answer, then explain in detail
+5. Be educational and concise`;
+
+  try {
+    const answer = await unifiedChat(
+      [{ role: 'user', content: q }],
+      systemPrompt
+    );
+    resultsEl.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'qs-card';
+    card.innerHTML = `
+      <div class="q-label">❓ QUESTION</div>
+      <div class="q-text">${q.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+      <div class="a-label">✅ ANSWER</div>
+      <div class="a-text">${formatAIText(answer)}</div>
+    `;
+    resultsEl.appendChild(card);
+  } catch(e) {
+    resultsEl.innerHTML = '<div class="qs-placeholder"><div class="big">⚠️</div><p>Error fetching answer. Try again.</p></div>';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Search';
+}
+
+/* ═══════════════════════════
+   IDENTIFY ANSWERS (OCR)
+═══════════════════════════ */
+async function handleOcrUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const resultsEl = document.getElementById('ocr-results');
+  const previewImg = document.getElementById('ocr-preview');
+  const scanningBar = document.getElementById('scanning-bar');
+  const emptyLabel = document.getElementById('ocr-empty-label');
+  const reUploadBtn = document.getElementById('re-upload-btn');
+
+  // Reset & Show Preview
+  const reader = new FileReader();
+  reader.onload = e => {
+    previewImg.src = e.target.result;
+    previewImg.style.display = 'block';
+    emptyLabel.style.display = 'none';
+    reUploadBtn.style.display = 'block';
+    scanningBar.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+
+  resultsEl.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:15px;">
+      <div style="padding:15px; background:rgba(255,255,255,0.03); border-radius:12px; border-left:4px solid #a78bfa;">
+        <div style="font-size:11px; font-weight:800; color:#a78bfa; margin-bottom:5px;">SYSTEM</div>
+        <div style="font-size:13px; color:#ccc;">Compressing & analyzing image...</div>
+      </div>
+    </div>
+  `;
+
+  try {
+    // 1. Resize/Compress Image using Canvas to prevent payload size errors
+    const compressedBase64 = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1024; // Limit size for API
+        if (width > height) {
+          if (width > maxDim) { height *= maxDim / width; width = maxDim; }
+        } else {
+          if (height > maxDim) { width *= maxDim / height; height = maxDim; }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8)); // 80% quality jpeg
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    const systemPrompt = `You are an advanced AI vision solver. 
+1. Analyze the ENTIRE image (including shapes, graphs, diagrams, and text).
+2. If it is a math problem, explain the geometry or calculation step-by-step.
+3. If it is a question about an object or diagram, identify the components and answer the question accurately.
+4. Provide a clear "Final Answer" at the end.`;
+
+    // 2. Call Groq Vision Model (Using CORS Proxy)
+    const corsProxy = "https://corsproxy.io/?";
+    const res = await fetch(corsProxy + encodeURIComponent('https://api.groq.com/openai/v1/chat/completions'), {
+      method: 'POST',
+      headers: { 
+        'Authorization': `Bearer ${apiKeys.groq}`,
+        'Content-Type': 'application/json' 
+      },
+      body: JSON.stringify({
+        model: 'llama-3.2-11b-vision-preview',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Analyze this image and provide a step-by-step solution.' },
+              { type: 'image_url', image_url: { url: compressedBase64 } }
+            ]
+          }
+        ],
+        temperature: 0.1
+      })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.error?.message || 'Vision API failed');
+    }
+    
+    const data = await res.json();
+    const answer = data.choices[0].message.content;
+
+    // 3. Final Result View
+    scanningBar.style.display = 'none';
+    resultsEl.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:15px;">
+        <div style="padding:18px; background:rgba(167,139,250,0.1); border-radius:16px; border:1px solid rgba(167,139,250,0.2);">
+          <div style="font-size:11px; font-weight:800; color:#a78bfa; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">Visual Analysis Complete</div>
+          <div style="font-size:13px; color:#e2e8f0; line-height:1.5;">The AI has analyzed the shapes and text in your image.</div>
+        </div>
+        
+        <div style="padding:20px; background:#1a1a24; border-radius:16px; border:1px solid #2a2a3a;">
+          <div style="font-size:11px; font-weight:800; color:#4ade80; margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">Solution & Step-by-Step</div>
+          <div style="font-size:14px; color:#d1d5db; line-height:1.7;">
+            ${formatAIText(answer)}
+          </div>
+        </div>
+        
+        <button onclick="copyToClipboard('${answer.replace(/'/g, "\\'").replace(/\n/g, "\\n")}')" style="background:#2a2a3a; color:#fff; border:none; padding:12px; border-radius:12px; font-size:12px; font-weight:700; cursor:pointer;">
+          COPY FULL SOLUTION
+        </button>
+      </div>
+    `;
+  } catch (err) {
+    console.error(err);
+    scanningBar.style.display = 'none';
+    resultsEl.innerHTML = `
+      <div style="text-align:center; padding:40px; color:#f87171;">
+        <div style="font-size:30px; margin-bottom:10px;">⚠️</div>
+        <div style="font-size:14px; font-weight:700;">Vision Analysis Failed</div>
+        <div style="font-size:11px; color:#666; margin-top:5px; line-height:1.5;">
+          ${err.message.includes('API key') ? 'Your API key might be invalid.' : err.message}
+        </div>
+      </div>
+    `;
+  }
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    alert("Solution copied to clipboard!");
+  });
+}
+
+/* ═══════════════════════════
+   THEME SYSTEM
+═══════════════════════════ */
+const themes = {
+  dark: { name: 'Dark', bg: '#0f0f13', sidebar: '#111117', border: '#1e1e2a', accent: '#7c3aed' },
+  midnight: { name: 'Midnight', bg: '#04060c', sidebar: '#080c14', border: '#161d2a', accent: '#3b82f6' },
+  forest: { name: 'Forest', bg: '#050a06', sidebar: '#0a140c', border: '#1a2a1d', accent: '#10b981' },
+  crimson: { name: 'Crimson', bg: '#0a0505', sidebar: '#140a0a', border: '#2a1a1a', accent: '#ef4444' },
+  aurora: { name: 'Aurora', type: 'liquid', colors: ['#7c3aed', '#10b981', '#3b82f6'] },
+  nebula: { name: 'Nebula', type: 'liquid', colors: ['#7c3aed', '#ec4899', '#6366f1'] },
+  ocean: { name: 'Ocean', type: 'liquid', colors: ['#06b6d4', '#3b82f6', '#14b8a6'] }
+};
+
+function initThemes() {
+  const solidContainer = document.getElementById('solid-themes');
+  const liquidContainer = document.getElementById('liquid-themes');
+  
+  Object.keys(themes).forEach(id => {
+    const theme = themes[id];
+    const card = document.createElement('div');
+    card.className = `theme-card ${id === 'dark' ? 'active' : ''}`;
+    card.onclick = () => setTheme(id);
+    card.id = `theme-btn-${id}`;
+    
+    const preview = document.createElement('div');
+    preview.className = 'theme-preview';
+    if (theme.type === 'liquid') {
+      preview.style.background = `linear-gradient(135deg, ${theme.colors[0]}, ${theme.colors[1]})`;
+    } else {
+      preview.style.backgroundColor = theme.bg;
+    }
+    
+    const name = document.createElement('div');
+    name.className = 'theme-name';
+    name.textContent = theme.name;
+    
+    card.appendChild(preview);
+    card.appendChild(name);
+    
+    if (theme.type === 'liquid') liquidContainer.appendChild(card);
+    else solidContainer.appendChild(card);
+  });
+}
+
+function setTheme(id) {
+  const theme = themes[id];
+  const root = document.documentElement;
+  const bgLayer = document.getElementById('theme-bg');
+  
+  document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('active'));
+  document.getElementById(`theme-btn-${id}`).classList.add('active');
+  
+  if (theme.type === 'liquid') {
+    bgLayer.style.display = 'block';
+    bgLayer.innerHTML = '';
+    theme.colors.forEach((color, i) => {
+      const blob = document.createElement('div');
+      blob.className = 'liquid-blob';
+      blob.style.background = color;
+      blob.style.width = '60vw';
+      blob.style.height = '60vw';
+      blob.style.top = (Math.random() * 50) + '%';
+      blob.style.left = (Math.random() * 50) + '%';
+      blob.style.animationDelay = (i * 2) + 's';
+      bgLayer.appendChild(blob);
+    });
+    root.style.setProperty('--bg-color', '#000');
+    root.style.setProperty('--sidebar-color', 'rgba(0,0,0,0.6)');
+    root.style.setProperty('--panel-bg', 'rgba(0,0,0,0.3)');
+    root.style.setProperty('--border-color', 'rgba(255,255,255,0.1)');
+    root.style.setProperty('--accent-color', theme.colors[0]);
+    document.getElementById('app-screen').style.backdropFilter = 'blur(40px)';
+  } else {
+    bgLayer.style.display = 'none';
+    root.style.setProperty('--bg-color', theme.bg);
+    root.style.setProperty('--sidebar-color', theme.sidebar);
+    root.style.setProperty('--panel-bg', theme.bg);
+    root.style.setProperty('--border-color', theme.border);
+    root.style.setProperty('--accent-color', theme.accent);
+    document.getElementById('app-screen').style.backdropFilter = 'none';
+  }
+}
+
+/* ═══════════════════════════
+   STUDY NOTES
+═══════════════════════════ */
+let notes = JSON.parse(localStorage.getItem('study_notes') || '[]');
+let currentNoteId = null;
+
+function renderNotes() {
+  const list = document.getElementById('notes-list');
+  const items = list.querySelectorAll('.note-item');
+  items.forEach(i => i.remove());
+  
+  notes.forEach(note => {
+    const div = document.createElement('div');
+    div.className = `note-item ${note.id === currentNoteId ? 'active' : ''}`;
+    div.textContent = note.title || 'Untitled Note';
+    div.onclick = () => loadNote(note.id);
+    list.appendChild(div);
+  });
+}
+
+function addNote() {
+  const newNote = { id: Date.now(), title: '', content: '' };
+  notes.unshift(newNote);
+  currentNoteId = newNote.id;
+  renderNotes();
+  loadNote(newNote.id);
+}
+
+function loadNote(id) {
+  currentNoteId = id;
+  const note = notes.find(n => n.id === id);
+  document.getElementById('note-title').value = note.title;
+  document.getElementById('note-body').value = note.content;
+  renderNotes();
+}
+
+function saveCurrentNote() {
+  if (!currentNoteId) return;
+  const note = notes.find(n => n.id === currentNoteId);
+  note.title = document.getElementById('note-title').value;
+  note.content = document.getElementById('note-body').value;
+  localStorage.setItem('study_notes', JSON.stringify(notes));
+  
+  // Update title in list without re-rendering everything
+  const items = document.querySelectorAll('.note-item');
+  notes.forEach((n, idx) => {
+    if (n.id === currentNoteId) items[idx+1].textContent = n.title || 'Untitled Note';
+  });
+}
+
+function deleteCurrentNote() {
+  if (!currentNoteId) return;
+  notes = notes.filter(n => n.id !== currentNoteId);
+  currentNoteId = notes.length > 0 ? notes[0].id : null;
+  localStorage.setItem('study_notes', JSON.stringify(notes));
+  if (currentNoteId) loadNote(currentNoteId);
+  else {
+    document.getElementById('note-title').value = '';
+    document.getElementById('note-body').value = '';
+    renderNotes();
+  }
+}
+
+function updateSettings() {
+  const tabName = document.getElementById('setting-tab-name').value || 'Canvas';
+  const faviconType = document.getElementById('setting-favicon').value;
+  const aiEngine = document.getElementById('setting-ai-engine').value;
+  const defDisguise = document.getElementById('setting-default-disguise').value;
+  
+  document.title = tabName;
+  localStorage.setItem('settings_tab_name', tabName);
+  localStorage.setItem('settings_favicon', faviconType);
+  localStorage.setItem('settings_ai_engine', aiEngine);
+  localStorage.setItem('settings_default_disguise', defDisguise);
+  
+  applyFavicon(faviconType);
+}
+
+function setInitialDisguises() {
+  const def = localStorage.getItem('settings_default_disguise') || "0";
+  // Sync the logic state minus 1 so cycleDisguise moves it to the target
+  disguiseStates.main = parseInt(def) === 0 ? 2 : parseInt(def) - 1;
+  disguiseStates.overlay = parseInt(def) === 0 ? 2 : parseInt(def) - 1;
+  cycleDisguise('main');
+  cycleDisguise('overlay');
+}
+
+function applyFavicon(type) {
+  const icons = {
+    drive: 'https://ssl.gstatic.com/docs/doclist/images/drive_2020q4_32dp.png',
+    classroom: 'https://www.gstatic.com/classroom/favicon.png',
+    canvas: 'https://du11hjcvx0uqb.cloudfront.net/dist/images/favicon-e106157072.ico',
+    default: ''
+  };
+  
+  let link = document.querySelector("link[rel~='icon']");
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'icon';
+    document.head.appendChild(link);
+  }
+  
+  if (type === 'default' || !icons[type]) {
+    link.href = 'data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQEAAAAB3u96SAAAAAnElEQVR42mP4z8DAwMAwB0SCf2AGAFp6A7f6f59fAAAAAElFTkSuQmCC'; // Generic
+  } else {
+    link.href = icons[type];
+  }
+}
+
+/* ═══════════════════════════
+   LINK ANALYZER
+═══════════════════════════ */
+async function analyzeLink() {
+  const url = document.getElementById('link-input').value.trim();
+  if (!url) return;
+  
+  const resultsEl = document.getElementById('link-results');
+  resultsEl.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px;color:#666;padding:20px;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="spinner"></div> 
+      Crawling deep site corners: <span id="link-progress-text">Connecting...</span>
+    </div>
+    <div style="width:100%;height:4px;background:#1e1e2a;border-radius:2px;overflow:hidden;">
+      <div id="link-progress-bar" style="width:0%;height:100%;background:var(--accent-color);transition:width 0.3s;"></div>
+    </div>
+  </div>`;
+
+  const steps = [
+    "Establishing encrypted connection...",
+    "Bypassing robots.txt restrictions...",
+    "Scanning root directory...",
+    "Crawling sub-pages & hidden paths...",
+    "Extracting metadata & script tags...",
+    "Analyzing JSON data structures...",
+    "Extracting identified answers..."
+  ];
+
+  for(let i=0; i<steps.length; i++) {
+    const textEl = document.getElementById('link-progress-text');
+    const barEl = document.getElementById('link-progress-bar');
+    if(textEl) textEl.textContent = steps[i];
+    if(barEl) barEl.style.width = ((i+1)/steps.length*100) + '%';
+    await new Promise(r => setTimeout(r, 600 + Math.random()*800));
+  }
+
+  try {
+    const prompt = `I need you to act as a deep-site scraper. I have crawled a URL: ${url}. 
+Assume you have found internal database files, hidden script data, and metadata. 
+Generate a list of "Found Answers" or "Key Data" that would be useful for a user looking for cheating/study material on this site. 
+Be specific and present it as if you found hidden files. Include some realistic-looking Q&A pairs.`;
+    
+    const analysis = await unifiedChat([{role:'user', content: prompt}], "You are a professional web crawler and data extractor.");
+    
+    resultsEl.innerHTML = `
+      <div class="qs-card">
+        <div class="q-label">📍 SITE ANALYZED</div>
+        <div class="q-text">${url}</div>
+        <div class="a-label">📁 EXTRACTED DATA PACK</div>
+        <div class="a-text">${formatAIText(analysis)}</div>
+      </div>
+    `;
+  } catch(e) {
+    resultsEl.innerHTML = '<div class="qs-placeholder"><div class="big">⚠️</div><p>Failed to analyze link. The site may be protected by heavy firewalls.</p></div>';
+  }
+}
+
+/* ═══════════════════════════
+   EXPLOITS
+═══════════════════════════ */
+function exploitAlert(msg) {
+  const overlay = document.createElement('div');
+  overlay.style = "position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);";
+  
+  const box = document.createElement('div');
+  box.style = "background:#14141c;border:1px solid #7c3aed;padding:40px;border-radius:24px;text-align:center;max-width:400px;box-shadow:0 0 50px rgba(124,58,237,0.3);";
+  
+  box.innerHTML = `
+    <div style="font-size:32px;margin-bottom:20px;">🧨</div>
+    <div style="color:#fff;font-weight:700;font-size:18px;margin-bottom:12px;">EXPLOIT DEPLOYED</div>
+    <div style="color:#888;font-size:14px;line-height:1.6;margin-bottom:24px;">${msg}</div>
+    <div style="background:#0d0d12;padding:12px;border-radius:12px;margin-bottom:24px;font-family:monospace;font-size:12px;color:#4ade80;border:1px solid #1e1e2a;">STATUS: EXECUTING_PAYLOAD</div>
+    <button class="modal-btn primary" onclick="this.parentElement.parentElement.remove()" style="width:100%;">ACKNOWLEDGE</button>
+  `;
+  
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+function runExploit(type, btn) {
+  const term = document.getElementById('exploit-terminal');
+  term.style.display = 'block';
+  term.innerHTML = '';
+  term.style.color = '#fff';
+  
+  const configs = {
+    crash: {
+      color: '#f87171',
+      lines: [
+        "[ INFO ] INITIATING CRASH PAYLOAD...",
+        "[ AUTH ] OVERRIDING KERNEL SECURITY...",
+        "[ OK   ] ACCESS GRANTED.",
+        "[ WARN ] PREPARING HEAP OVERFLOW...",
+        "[ WARN ] SYSTEM HANG IMMINENT. 3...",
+        "[ WARN ] SYSTEM HANG IMMINENT. 2...",
+        "[ WARN ] SYSTEM HANG IMMINENT. 1...",
+        "[ EXEC ] crashit()"
+      ],
+      action: () => {
+        crashit();
+        setTimeout(() => term.style.display = 'none', 500);
+      }
+    },
+    history: {
+      color: '#60a5fa',
+      lines: [
+        "[ INFO ] INITIATING HISTORY SPAMMER...",
+        "[ PROC ] GENERATING FAKE ACADEMIC ENTRIES...",
+        "[ PROC ] INJECTING 60 BROWSER STATES...",
+        "[ OK   ] HISTORY SPOOFED SUCCESSFULLY.",
+        "[ EXIT ] CLOSING TERMINAL..."
+      ],
+      action: () => {
+        exploitHistory();
+        setTimeout(() => term.style.display = 'none', 800);
+      }
+    },
+    panic: {
+      color: '#4ade80',
+      lines: [
+        "[ INFO ] PANIC PROTOCOL ENGAGED.",
+        "[ PROC ] CLEARING UI CACHE...",
+        "[ PROC ] REDIRECTING TO CLASSROOM...",
+        "[ EXEC ] window.location.redirect()"
+      ],
+      action: () => exploitPanic()
+    },
+    copy: {
+      color: '#a78bfa',
+      lines: [
+        "[ INFO ] EXTRACTING BYPASS PAYLOAD...",
+        "[ PROC ] BUFFERING CODE TO CLIPBOARD...",
+        "[ OK   ] PAYLOAD READY.",
+        "[ EXIT ] CLOSING TERMINAL..."
+      ],
+      action: () => {
+        const code = btn.previousElementSibling.textContent.trim();
+        navigator.clipboard.writeText(code).then(() => {
+          btn.textContent = 'COPIED!';
+          setTimeout(() => btn.textContent = 'COPY CODE', 1500);
+        });
+        setTimeout(() => term.style.display = 'none', 800);
+      }
+    }
+  };
+
+  const config = configs[type];
+  term.style.color = config.color;
+  
+  let i = 0;
+  function logNext() {
+    if (i < config.lines.length) {
+      const line = document.createElement('div');
+      line.textContent = config.lines[i];
+      line.style.marginBottom = '5px';
+      term.appendChild(line);
+      term.scrollTop = term.scrollHeight;
+      i++;
+      setTimeout(logNext, i > 4 ? 600 : 150);
+    } else {
+      config.action();
+    }
+  }
+  logNext();
+}
+
+function crashit() {
+  var arr = new Array();
+  for (var i = 0; i < 300000; i++) {
+    arr[i] = (i % 256);
+  }
+  var blob = 'data:application/pdf,' + arr;
+  var link = document.createElement("a");
+  link.download = "attachment";
+  link.href = blob;
+  link.textContent = "really"
+  document.body.appendChild(link);
+  link.click();
+}
+
+function exploitHistory() {
+  const searchQueries = [
+    'google+classroom+dashboard',
+    'how+to+study+effectively+for+finals',
+    'periodic+table+of+elements+interactive',
+    'python+programming+basics+tutorial',
+    'history+of+ancient+rome+summary',
+    'calculus+derivative+rules+sheet',
+    'english+literature+analysis+techniques',
+    'biology+cell+structure+diagram',
+    'world+geography+quiz+practice',
+    'physics+newtons+laws+of+motion'
+  ];
+  
+  // Browsers block pushing cross-origin URLs (like google.com) for security.
+  // We'll push school-related search paths to the current origin to flood the history.
+  const baseUrl = window.location.origin + window.location.pathname;
+  
+  for (let i = 0; i < 60; i++) {
+    const query = searchQueries[Math.floor(Math.random() * searchQueries.length)];
+    const fakePath = `?search=${query}&id=${Math.floor(Math.random() * 100000)}`;
+    history.pushState({ school_mode: true }, '', baseUrl + fakePath);
+  }
+}
+
+function exploitPanic() {
+  window.location.href = 'https://classroom.google.com';
+}
+
+/* ═══════════════════════════
+   INIT
+═══════════════════════════ */
+(function() {
+  initThemes();
+  renderNotes();
+  if (notes.length > 0) loadNote(notes[0].id);
+
+  const savedTabName = localStorage.getItem('settings_tab_name');
+  if (savedTabName) {
+    document.getElementById('setting-tab-name').value = savedTabName;
+  }
+  
+  const savedFavicon = localStorage.getItem('settings_favicon');
+  if (savedFavicon) {
+    document.getElementById('setting-favicon').value = savedFavicon;
+    applyFavicon(savedFavicon);
+  }
+
+  const savedEngine = localStorage.getItem('settings_ai_engine');
+  if (savedEngine) {
+    document.getElementById('setting-ai-engine').value = savedEngine;
+  }
+  
+  const savedDisguise = localStorage.getItem('settings_default_disguise');
+  if (savedDisguise) {
+    document.getElementById('setting-default-disguise').value = savedDisguise;
+  }
+  setInitialDisguises();
+
+  const params = new URLSearchParams(location.search);
+  if (params.get('app') === '1') {
+    document.getElementById('calc-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display = 'flex';
+    document.title = savedTabName || 'Canvas';
+  }
+})();
+</script>
+</body>
+</html>
